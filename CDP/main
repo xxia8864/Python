@@ -1,0 +1,137 @@
+from netmiko import ConnectHandler
+from netmiko.exceptions import NetMikoTimeoutException
+from netmiko.exceptions import SSHException
+from netmiko.exceptions import AuthenticationException
+from datetime import date
+import time
+import os
+import re
+
+# here is list of cisco routers ip addresses
+ip_list = open("hosts.txt")
+# clearing the old data from the CSV file and writing the headers
+# Prepare result file and log
+start = time.time()
+# here is list of cisco routers ip addresses
+url = 'Z:\\xxx\\script\\CDP\\' + str(date.today()) + "\\"
+result = url + "result.csv"
+log = url + "log.txt"
+# clearing the old data from the CSV file and writing the headers
+if not os.path.exists(url):
+    os.mkdir(url)
+if not os.path.isfile(result):
+    f = open(result, "w+")
+    f.write("IP Address, Result")
+    f.write("\n")
+    f.close()
+password = open(r"C:\Users\xxx\PycharmProjects\pwd.txt").readline()
+
+# loop all ip addresses in ip_list
+for ip in ip_list:
+    ip = ip.strip()
+    cisco = {
+        # 'device_type': 'cisco_ios',
+        'device_type': 'cisco_nxos',
+        'ip': ip,
+        # 'username': 'xxx',  # ssh username
+        'username': 'xxx',
+        # 'username': 'admin',
+        'password': password.strip(),  # ssh password
+        # 'secret': password.strip(),  # enable password
+        # 'password': 'Th1nkp@d',
+        'ssh_strict': False,
+        'fast_cli': True,
+    }
+    # handling exceptions errors
+    try:
+        net_connect = ConnectHandler(**cisco)
+    except NetMikoTimeoutException:
+        f = open(result, "a")
+        f.write(ip + "," + "Device Unreachable/SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    except AuthenticationException:
+        f = open(result, "a")
+        f.write(ip + "," + "Authentication Failure")
+        f.write("\n")
+        f.close()
+        continue
+    except SSHException:
+        f = open(result, "a")
+        f.write(ip + "," + "SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    try:
+        net_connect.enable()
+    # handling exceptions errors
+    except ValueError:
+        f = open(result, "a")
+        f.write(ip + "," + "Could be SSH Enable Password issue ")
+        f.write("\n")
+        f.close()
+        continue
+    print("login " + ip)
+    # Back up current configuration
+    save_configue = net_connect.send_command("show run", read_timeout=100)
+    hostname = net_connect.find_prompt()[:-1]
+    with open(url + str(hostname) + '.txt',
+              'w+') as running_configure:
+        running_configure.write(save_configue)
+    # Get CDP neighbour output
+    cdp_neighbor = net_connect.send_command("show cdp nei detail")
+    device = {}
+    device_list = []
+    cdp_txt = open(url + "cdp.txt", 'a')
+    cdp_txt.write(hostname + '\n')
+    cdp_txt.write(cdp_neighbor)
+    cdp_txt.close()
+    # Poll hostname, interface info from CDP neighbour output
+    for line in cdp_neighbor.splitlines():
+        if '-------------------------' in line:
+            device = {}
+            device_list += [device]
+        else:
+            CDP_hostname = re.match(r'Device ID:(.*)', line, re.M | re.I)
+            if CDP_hostname:
+                device['CDP_hostname'] = CDP_hostname.group(1).split('.')[0].strip(' ')
+            interface = re.match(r'Interface: *(.*), *(.*) (.*): (.*)', line, re.M | re.I)
+            if interface:
+                device['src_int'] = interface.group(1).strip(' ')
+                device['dst_int'] = interface.group(4).strip(' ')
+            CDP_type = re.match(r'Platform:(.*), *(.*): *(.*)', line, re.M | re.I)
+            if CDP_type:
+                device['CDP_type'] = CDP_type.group(3)
+    # Build configuration
+    configue = ''
+    for device in device_list:
+        if 'hone' in device['CDP_type'] or 'ost' in device['CDP_type']:
+            continue
+        configue += 'interface ' + device['src_int'] + '\n'
+        configue += 'description {cr}' + device['CDP_hostname'] + ':' + device['dst_int'] + '\n'
+    config_output = net_connect.send_command_timing('conf t')
+    config_output += net_connect.send_command_timing(configue, read_timeout=100)
+    config_output += net_connect.send_command_timing('\n end \n write mem\n')
+    print(config_output)
+    output_txt = open(url + "output.txt", 'a')
+    output_txt.write(hostname + '\n')
+    output_txt.write(configue)
+    output_txt.write(config_output)
+    output_txt.close()
+    if '% ' in config_output or 'ERROR' in config_output:
+        success = 'no'
+    else:
+        success = 'yes'
+    f = open(result, "a")
+    f.write(ip + "," + success)
+    f.write("\n")
+    f.close()
+
+# calculate time spent
+end = time.time()
+time_spent = end - start
+hours = int(time_spent / 3600)
+minutes = int(time_spent / 60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours * 60) + "MIN " + str(seconds - minutes * 60) + " SEC")
