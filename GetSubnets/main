@@ -1,0 +1,138 @@
+from netmiko import ConnectHandler
+from netmiko.ssh_exception import NetMikoTimeoutException
+from netmiko.ssh_exception import SSHException
+from netmiko.ssh_exception import AuthenticationException
+from datetime import date
+import time
+import os
+
+# Prepare result file and log
+start = time.time()
+# here is list of cisco routers ip addresses
+
+ip_list = open("hosts.txt")
+result = "result.csv"
+# clearing the old data from the CSV file and writing the headers
+'''
+f = open(result, "w+")
+f.write("IP Address,Hostname,Interface,subnet,Interface IP")
+f.write("\n")
+f.close()
+'''
+SIP = 1
+password = open("C:\\Users\\xx\\PycharmProjects\\pwd.txt").readline()
+# loop all ip addresses in ip_list
+for ip in ip_list:
+    ip = ip.strip()
+    cisco = {
+        # Cisco IOS
+        # 'device_type': 'cisco_ios',
+        # Nexus
+        # 'device_type': 'cisco_nxos',
+        # Cisco ASA
+        # 'device_type': 'cisco_asa',
+        # Arista
+        'device_type': 'arista_eos',
+        'ip': ip,
+        'username': 'xxia',  # ssh username
+        # 'username': 'bnhq\\xxia',  # ssh username
+        'password': password.strip(),  # ssh password
+        'secret': password.strip(),  # ssh_enable_password
+        'ssh_strict': False,
+        'fast_cli': False,
+    }
+    print("trying " + ip.strip())
+    output = ""
+    # handling exceptions errors
+    try:
+        net_connect = ConnectHandler(**cisco)
+    except NetMikoTimeoutException:
+        f = open(result, "a")
+        f.write(ip + "," + "Device Unreachable/SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    except AuthenticationException:
+        f = open(result, "a")
+        f.write(ip + "," + "Authentication Failure")
+        f.write("\n")
+        f.close()
+        continue
+    except SSHException:
+        f = open(result, "a")
+        f.write(ip + "," + "SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    try:
+        net_connect.enable()
+    # handling exceptions errors
+    except ValueError:
+        f = open(result, "a")
+        f.write(ip + "," + "Could be SSH Enable Password issue ")
+        f.write("\n")
+        f.close()
+        continue
+    print("login")
+    hostname = net_connect.find_prompt().strip('#')
+    sh_int_output = net_connect.send_command('show ip int brief')
+    sh_vrf_output = net_connect.send_command('show vrf | inc routing')
+    vrf_lines = sh_vrf_output.split('\n')
+    i = 0
+    sh_route_output = ''
+    while i < vrf_lines.__len__():
+        vrf = vrf_lines[i].split()[0]
+        sh_route_output += net_connect.send_command('show ip route vrf ' + vrf + ' connected | ex Code')
+        i += 1
+    intIP = []
+    subnets = []
+    int_lines = sh_int_output.split('\n')
+    subnet_lines = sh_route_output.split('\n')
+
+    i = 0
+    while i < int_lines.__len__():
+        if "up" in int_lines[i]:
+            a = int_lines[i].split()[0]
+            b = int_lines[i].split()[1]
+            intIP.append([a, ' ', b])
+            i += 1
+        else:
+            i += 1
+    i = 0
+    while i < subnet_lines.__len__():
+        if "connected" in subnet_lines[i]:
+            a = subnet_lines[i].split()[1]
+            b = subnet_lines[i].split(',')[1].strip()
+            subnets.append([a, b])
+            i += 1
+        else:
+            i += 1
+    i = 0
+    while i < intIP.__len__():
+        j = 0
+        while j < subnets.__len__():
+            if intIP[i][0] == subnets[j][1]:
+                intIP[i][1] = subnets[j][0]
+                j += 1
+                break;
+            else:
+                j += 1
+        i += 1
+    f = open(result, 'a')
+    i = 0
+    while i < intIP.__len__():
+        f.write(ip + ',' + hostname + ',' + intIP[i][0] + ',' + intIP[i][1] + ',' + intIP[i][2] + '\n')
+        i += 1
+    f.close()
+# Close connection
+    net_connect.disconnect()
+    f.close()
+    print(str(SIP) + ' is complete')
+    SIP += 1
+# calculate time spent
+end = time.time()
+time_spent = end - start
+hours = int(time_spent/3600)
+minutes = int(time_spent/60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours*60) + "MIN ")
