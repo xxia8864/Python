@@ -1,0 +1,41 @@
+import subprocess
+import csv
+
+# List of usernames to check
+usernames = open('users.txt')
+
+# CSV file to store the user data
+csv_filename = 'user_details.csv'
+
+# Open a file to write to, and create a CSV writer object
+with open(csv_filename, mode='w', newline='', encoding='utf-8') as csvfile:
+    csvwriter = csv.writer(csvfile)
+    # Write the CSV header
+    csvwriter.writerow(['Username', 'Full Name', 'Last Logon'])
+
+    # Iterate through each username
+    for username in usernames:
+        try:
+            # Execute the 'net user' command
+            username = username.strip()
+            result = subprocess.run(['net', 'user', username, '/domain'], capture_output=True, text=True, check=True)
+            output = result.stdout
+
+            # Initialize fullName and lastLogon
+            fullName, lastLogon = 'not found', 'not found'
+
+            # Search for the Full Name and Last Logon in the command output
+            for line in output.split('\n'):
+                if 'Full Name' in line:
+                    fullName = line.split('Full Name')[1].strip()
+                elif 'Last logon' in line:
+                    lastLogon = line.split('Last logon')[1].strip()
+
+            # Write the username, full name, and last logon to the CSV file
+            csvwriter.writerow([username, fullName, lastLogon])
+
+        except subprocess.CalledProcessError:
+            # If the command fails (e.g., username not found), write 'not exist' for full name and last logon
+            csvwriter.writerow([username, 'not exist', 'not exist'])
+
+print(f"User details have been written to {csv_filename}")
