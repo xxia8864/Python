@@ -1,0 +1,135 @@
+from netmiko.exceptions import NetMikoTimeoutException
+from netmiko.exceptions import SSHException
+from netmiko.exceptions import AuthenticationException
+from netmiko import ConnectHandler
+import time
+import sys
+
+# File to be uploaded
+file_name = 'nxos64-cs.10.4.3.F.bin'
+
+OS_system = input('please select code\n 1.IOS\n 2.NXOS\n')
+
+if OS_system == '1':
+    device_type = 'cisco_ios'
+    host = 'ios.txt'
+elif OS_system == '2':
+    device_type = 'cisco_nxos'
+    nx_odd = input('please select devices\n 1.Odd\n 2.Even\n')
+    if nx_odd == '1':
+        host = 'nxos_odd.txt'
+    elif nx_odd == '2':
+        host = 'nxos_even.txt'
+    else:
+        print('invalid input')
+        sys.exit()
+else:
+    print('invalid input')
+    sys.exit()
+print("Below devices will be patched with " + file_name + "\n")
+print(open(host).read())
+proceed = input("continue?(Y/N)\n")
+if proceed != 'Y' and proceed != 'y':
+    print("Double check before taking down environment")
+    sys.exit()
+# Cisco Nxos
+# file_system = 'bootblash:'
+# Prepare result file and log
+start = time.time()
+
+# here is list of cisco routers ip addresses
+
+result = "result.csv"
+f = open(result, "w+")
+f.write("IP Address, Hostname, Result")
+f.write("\n")
+f.close()
+
+password = open(r"C:\Users\xxx\PycharmProjects\pwd.txt").readline()
+# loop all ip addresses in ip_list
+ip_list = open(host)
+for ip in ip_list:
+    ip = ip.strip()
+    cisco = {
+        # Cisco IOS
+        'device_type': device_type,
+        'ip': ip,
+        'username': 'xxxx',  # ssh username
+        'password': password.strip(),  # ssh password
+        'secret': password.strip(),  # ssh_enable_password
+        'ssh_strict': False,
+        'fast_cli': False,
+    }
+    print("trying " + ip.strip())
+    # handling exceptions errors
+    try:
+        net_connect = ConnectHandler(**cisco)
+    except NetMikoTimeoutException:
+        f = open(result, "a")
+        f.write(ip + "," + "Device Unreachable/SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    except AuthenticationException:
+        f = open(result, "a")
+        f.write(ip + "," + "Authentication Failure")
+        f.write("\n")
+        f.close()
+        continue
+    except SSHException:
+        f = open(result, "a")
+        f.write(ip + "," + "SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    try:
+        net_connect.enable()
+    # handling exceptions errors
+    except ValueError:
+        f = open(result, "a")
+        f.write(ip + "," + "Could be SSH Enable Password issue ")
+        f.write("\n")
+        f.close()
+        continue
+    print("login")
+    # Record expected result in cvs file
+    hostname = net_connect.find_prompt()[:-1]
+    if OS_system == '1':
+        try:
+            commands = [
+                f'boot system flash:/' + file_name,
+                'end',
+                'write memory'
+            ]
+            output = net_connect.send_config_set(commands)
+            print(output)
+            reload_output = net_connect.send_command_timing('reload')
+            if 'confirm' in reload_output:
+                net_connect.send_command('\n')  # Sending newline to confirm the reload
+        except Exception as e:
+            print(str(e))
+    elif OS_system == '2':
+        try:
+            net_connect.send_command('copy running-config startup-config')
+            install_command = 'install all nxos bootflash:' + file_name + ' non-interruptive'
+            # Send the install command and monitor output
+            install_output = net_connect.send_command_timing(install_command)
+            print(install_output)
+            # Checking for any final confirmations or output processing
+        except Exception as e:
+            print(str(e))
+    else:
+        print("How could it able to reach here? Check your code idiot!")
+        sys.exit()
+    f = open(result, 'a')
+    f.write(ip + ',' + hostname + ',yes' + '\n')
+    f.close()
+    # Close connection
+    net_connect.disconnect()
+# calculate time spent
+end = time.time()
+time_spent = end - start
+hours = int(time_spent / 3600)
+minutes = int(time_spent / 60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours * 60) + "MIN ")
