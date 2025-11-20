@@ -1,0 +1,110 @@
+from netmiko import ConnectHandler
+from netmiko.ssh_exception import NetMikoTimeoutException
+from netmiko.ssh_exception import SSHException
+from netmiko.ssh_exception import AuthenticationException
+from datetime import date
+import time
+import os
+import re
+
+# Prepare result file and log
+start = time.time()
+# here is list of cisco routers ip addresses
+
+ip_list = open("hosts.txt")
+url = 'Z:\\xx\\script\\inv\\' + str(date.today()) + "\\"
+result = url + "result.csv"
+# clearing the old data from the CSV file and writing the headers
+
+if not os.path.exists(url):
+    os.mkdir(url)
+if not os.path.exists(result):
+    f = open(result, "w+")
+    f.write("IP Address,Host,Model,SN")
+    f.write("\n")
+    f.close()
+
+password = open("C:\\Users\\xxia\\PycharmProjects\\pwd.txt").readline()
+# loop all ip addresses in ip_list
+for ip in ip_list:
+    ip = ip.strip()
+    cisco = {
+        # Cisco IOS
+        'device_type': 'cisco_ios',
+        # Nexus
+        # 'device_type': 'cisco_nxos',
+        # Cisco ASA
+        # 'device_type': 'cisco_asa',
+        # Arista
+        # 'device_type': 'arista_eos',
+        'ip': ip,
+        'username': 'xx',  # ssh username
+        'password': password.strip(),  # ssh password
+        'secret': password.strip(),  # ssh_enable_password
+        'ssh_strict': False,
+        'fast_cli': False,
+    }
+    print("trying " + ip.strip())
+    output = ""
+    # handling exceptions errors
+    try:
+        net_connect = ConnectHandler(**cisco)
+    except NetMikoTimeoutException:
+        f = open(result, "a")
+        f.write(ip + "," + "Device Unreachable/SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    except AuthenticationException:
+        f = open(result, "a")
+        f.write(ip + "," + "Authentication Failure")
+        f.write("\n")
+        f.close()
+        continue
+    except SSHException:
+        f = open(result, "a")
+        f.write(ip + "," + "SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    try:
+        net_connect.enable()
+    # handling exceptions errors
+    except ValueError:
+        f = open(result, "a")
+        f.write(ip + "," + "Could be SSH Enable Password issue ")
+        f.write("\n")
+        f.close()
+        continue
+    print("login")
+    hostname = net_connect.find_prompt().strip('#')
+    sh_inv_output = net_connect.send_command('show inventory')
+    Qlines = sh_inv_output.count('\n')
+    lines = sh_inv_output.split('\n')
+    i = 0
+    while i < Qlines:
+        if 'PID' in lines[i]:
+            regex_PID = re.compile(r'PID:\s(\S+)')
+            PID = regex_PID.findall(lines[i])
+            if PID.__len__() == 0:
+                i += 1
+                continue;
+            regex_SN = re.compile(r'PID.+SN:\s(\S+)')
+            SN = regex_SN.findall(lines[i])
+            if SN.__len__() == 0:
+                i += 1
+                continue;
+            # Record expected result in cvs file
+            f = open(result, 'a')
+            f.write(ip + ',' + hostname + ',' + PID[0] + ',' + SN[0] + '\n')
+            f.close()
+        i += 1
+# Close connection
+    net_connect.disconnect()
+# calculate time spent
+end = time.time()
+time_spent = end - start
+hours = int(time_spent/3600)
+minutes = int(time_spent/60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours*60) + "MIN ")
