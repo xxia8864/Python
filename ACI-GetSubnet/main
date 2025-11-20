@@ -1,9 +1,9 @@
 import acitoolkit.acitoolkit as aci
 from acitoolkit import Subnet
 # Replace with your APIC credentials
-APIC_URL = "https://10.180.0.11"
-LOGIN = "xxia"
-PASSWORD = open(r'C:\Users\xxia\PycharmProjects\pwd.txt').readline()
+APIC_URL = "https://x.x.x.x1"
+LOGIN = "xxxx"
+PASSWORD = open(r'C:\Users\xxxxx\PycharmProjects\pwd.txt').readline()
 
 def main():
     f = open("result.csv", "w+")
