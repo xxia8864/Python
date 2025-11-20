@@ -1,0 +1,86 @@
+from netmiko import ConnectHandler
+from netmiko.exceptions import NetMikoTimeoutException
+from netmiko.exceptions import SSHException
+from netmiko.exceptions import AuthenticationException
+import time
+
+# Prepare result file and log
+start = time.time()
+# here is list of cisco routers ip addresses
+
+ip_list = open("hosts.txt")
+result = "result.csv"
+log = "log.txt"
+# clearing the old data from the CSV file and writing the headers
+f = open(result, "w+")
+f.write("IP Address, Hostname, Result")
+f.write("\n")
+f.close()
+
+password = open(r"C:\Users\xxxx\PycharmProjects\pwd.txt").readline()
+# loop all ip addresses in ip_list
+for ip in ip_list:
+    ip = ip.strip()
+    cisco = {
+        # Cisco IOS
+        'device_type': 'cisco_ios',
+        # Nexus
+        # 'device_type': 'cisco_nxos',
+        # Cisco ASA
+        # 'device_type': 'cisco_asa',
+        # Arista
+        # 'device_type': 'arista_eos',
+        'ip': ip,
+        'username': 'xxx',  # ssh username
+        # 'username': 'bnhq\\xxia',  # ssh username
+        # 'username': 'admin',
+        'password': password.strip(),  # ssh password
+        # 'password': 'Th1nkp@d',
+        'secret': password.strip(),  # ssh_enable_password
+        'ssh_strict': False,
+        'fast_cli': False,
+    }
+    print("trying " + ip.strip())
+    output = ""
+    # handling exceptions errors
+    try:
+        net_connect = ConnectHandler(**cisco)
+    except NetMikoTimeoutException:
+        f = open(result, "a")
+        f.write(ip + "," + "Device Unreachable/SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    except AuthenticationException:
+        f = open(result, "a")
+        f.write(ip + "," + "Authentication Failure")
+        f.write("\n")
+        f.close()
+        continue
+    except SSHException:
+        f = open(result, "a")
+        f.write(ip + "," + "SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    try:
+        net_connect.enable()
+    # handling exceptions errors
+    except ValueError:
+        f = open(result, "a")
+        f.write(ip + "," + "Could be SSH Enable Password issue ")
+        f.write("\n")
+        f.close()
+        continue
+    print("login")
+    f = open(result, "a")
+    f.write(ip + "," + "Login Success")
+    f.write("\n")
+    f.close()
+# calculate time spent
+end = time.time()
+time_spent = end - start
+hours = int(time_spent/3600)
+minutes = int(time_spent/60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours*60) + "MIN ")
