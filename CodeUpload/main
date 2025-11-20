@@ -1,0 +1,88 @@
+from netmiko.exceptions import NetMikoTimeoutException
+from netmiko.exceptions import SSHException
+from netmiko.exceptions import AuthenticationException
+from netmiko import ConnectHandler, FileTransfer
+import time
+# Prepare result file and log
+start = time.time()
+# File to be uploaded
+file_name = 'c1000-universalk9-mz.152-7.E9.bin'
+
+OS_system = 'ios'
+if OS_system == 'ios':
+     file_system = 'flash:'
+     device_type = 'cisco_ios'
+# Cisco Nxos
+# file_system = 'bootblash:'
+ftp_command = "copy ftp://firmware_downloads:Dnta-BtsTii!x.x.x.x/firmware/" + file_name + ' ' + file_system + file_name
+
+# here is list of cisco routers ip addresses
+ip_list = open("hosts.txt")
+result = "result.csv"
+f = open(result, "w+")
+f.write("IP Address, Hostname, Result")
+f.write("\n")
+f.close()
+
+password = open(r"C:\Users\xxia\PycharmProjects\pwd.txt").readline()
+# loop all ip addresses in ip_list
+for ip in ip_list:
+    ip = ip.strip()
+    cisco = {
+        # Cisco IOS
+        'device_type': device_type,
+        'ip': ip,
+        'username': 'xxia',  # ssh username
+        'password': password.strip(),  # ssh password
+        'secret': password.strip(),  # ssh_enable_password
+        'ssh_strict': False,
+        'fast_cli': False,
+    }
+    print("trying " + ip.strip())
+    # handling exceptions errors
+    try:
+        net_connect = ConnectHandler(**cisco)
+    except NetMikoTimeoutException:
+        f = open(result, "a")
+        f.write(ip + "," + "Device Unreachable/SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    except AuthenticationException:
+        f = open(result, "a")
+        f.write(ip + "," + "Authentication Failure")
+        f.write("\n")
+        f.close()
+        continue
+    except SSHException:
+        f = open(result, "a")
+        f.write(ip + "," + "SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    try:
+        net_connect.enable()
+    # handling exceptions errors
+    except ValueError:
+        f = open(result, "a")
+        f.write(ip + "," + "Could be SSH Enable Password issue ")
+        f.write("\n")
+        f.close()
+        continue
+    print("login")
+    net_connect.send_command(ftp_command, expect_string=r'#', delay_factor=5)
+
+    # Record expected result in cvs file
+    hostname = net_connect.find_prompt()[:-1]
+    f = open(result, 'a')
+    f.write(ip + ',' + hostname + ', success,\n')
+    f.close()
+# Close connection
+    net_connect.disconnect()
+# calculate time spent
+end = time.time()
+time_spent = end - start
+hours = int(time_spent/3600)
+minutes = int(time_spent/60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours*60) + "MIN ")
