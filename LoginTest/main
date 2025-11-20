@@ -32,10 +32,7 @@ for ip in ip_list:
         # 'device_type': 'arista_eos',
         'ip': ip,
         'username': 'xxx',  # ssh username
-        # 'username': 'bnhq\\xxia',  # ssh username
-        # 'username': 'admin',
         'password': password.strip(),  # ssh password
-        # 'password': 'Th1nkp@d',
         'secret': password.strip(),  # ssh_enable_password
         'ssh_strict': False,
         'fast_cli': False,
