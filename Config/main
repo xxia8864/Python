@@ -1,0 +1,117 @@
+from netmiko import ConnectHandler
+from netmiko.exceptions import NetMikoTimeoutException
+from netmiko.exceptions import SSHException
+from netmiko.exceptions import AuthenticationException
+from datetime import date
+import time
+import os
+import re
+
+# Prepare result file and log
+start = time.time()
+# here is list of cisco routers ip addresses
+
+ip_list = open("hosts.txt")
+result = "result.csv"
+log = "log.txt"
+# clearing the old data from the CSV file and writing the headers
+configuration = open("config.txt").readlines()
+f = open(result, "w+")
+f.write("IP Address, Result")
+f.write("\n")
+f.close()
+f = open('config.txt')
+cmd = f.read()
+f.close()
+password = open(r'C:\Users\xxx\PycharmProjects\pwd.txt').readline()
+# loop all ip addresses in ip_list
+for ip in ip_list:
+    ip = ip.strip()
+    cisco = {
+        # Cisco IOS
+        'device_type': 'cisco_ios',
+        # Nexus
+        # 'device_type': 'cisco_nxos',
+        # Cisco ASA
+        # 'device_type': 'cisco_asa',
+        # Arista
+        # 'device_type': 'arista_eos',
+        'ip': ip,
+        # 'username': 'xxia',  # ssh username
+        'username': 'bnhq\\xxia',  # ssh username
+        'password': password.strip(),  # ssh password
+        'secret': password.strip(),  # ssh_enable_password
+        'ssh_strict': False,
+        'fast_cli': False,
+    }
+    print("trying " + ip.strip())
+    output = ""
+    # handling exceptions errors
+    try:
+        net_connect = ConnectHandler(**cisco)
+    except NetMikoTimeoutException:
+        f = open(result, "a")
+        f.write(ip + "," + "Device Unreachable/SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    except AuthenticationException:
+        f = open(result, "a")
+        f.write(ip + "," + "Authentication Failure")
+        f.write("\n")
+        f.close()
+        continue
+    except SSHException:
+        f = open(result, "a")
+        f.write(ip + "," + "SSH not enabled")
+        f.write("\n")
+        f.close()
+        continue
+    try:
+        net_connect.enable()
+    # handling exceptions errors
+    except ValueError:
+        f = open(result, "a")
+        f.write(ip + "," + "Could be SSH Enable Password issue ")
+        f.write("\n")
+        f.close()
+        continue
+    print("login")
+
+# Back up current configuration
+    # save_configue = net_connect.send_command_timing("show run", delay_factor=30)
+    net_connect.send_command("terminal length 0")
+    save_configue = net_connect.send_command("show run")
+    hostname = net_connect.find_prompt().strip('#')
+    # execute show version on router and save output to output object
+    print('config backup')
+    with open(str(hostname) + '.txt', 'w+') as running_configure:
+        running_configure.write(save_configue)
+# configuration
+    configure_sent = net_connect.send_config_from_file("config.txt")
+    configure_sent += net_connect.save_config()
+    print(configure_sent)
+    if '% ' in configure_sent or 'ERROR' in configure_sent:
+        success = 'no'
+    else:
+        success = 'yes'
+# Record output in logfile
+    o = open(log, "a")
+    o.write(ip + "\n")
+    o.write(configure_sent)
+    o.write("\n")
+    o.close()
+# Record result
+    f = open(result, "a")
+    f.write(ip + "," + success)
+    f.write("\n")
+    f.close()
+# Close connection
+    net_connect.disconnect()
+# calculate time spent
+end = time.time()
+time_spent = end - start
+hours = int(time_spent/3600)
+minutes = int(time_spent/60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours*60) + "MIN ")
