@@ -1,0 +1,40 @@
+import os
+import time
+from datetime import date
+import subprocess
+
+start = time.time()
+ip_list = open("IPList.txt")
+
+url = 'Z:\\xxia\\script\\Pingtest\\' + str(date.today()) + "\\"
+logfile = url + "result.csv"
+if not os.path.exists(url):
+    os.mkdir(url)
+f = open(logfile, "w+")
+f.write("IP Address, result")
+f.write("\n")
+f.close()
+
+for ip in ip_list:
+    f = open(logfile, "a")
+    ip = ip.strip()
+    output = subprocess.Popen(["ping.exe", ip], stdout=subprocess.PIPE).communicate()[0]
+    data = output.decode("utf-8")
+    print(str(data))
+    if 'TTL expired' in data or 'Received = 0' in data:
+        result = 'no'
+    else:
+        result = 'yes'
+    print(ip + ' ' + result)
+
+    f = open(logfile, "a")
+    f.write(ip + "," + result)
+    f.write("\n")
+    f.close()
+
+end = time.time()
+time_spent = end - start
+hours = int(time_spent/3600)
+minutes = int(time_spent/60)
+seconds = int(time_spent)
+print("Time spent " + str(hours) + "H " + str(minutes - hours*60) + "MIN " + str(seconds - minutes * 60) + " SEC")
