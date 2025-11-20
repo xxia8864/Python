@@ -34,8 +34,7 @@ for ip in ip_list:
         # Arista
         'device_type': 'arista_eos',
         'ip': ip,
-        'username': 'xxia',  # ssh username
-        # 'username': 'bnhq\\xxia',  # ssh username
+        'username': 'xxxx',  # ssh username
         'password': password.strip(),  # ssh password
         'secret': password.strip(),  # ssh_enable_password
         'ssh_strict': False,
