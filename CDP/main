@@ -38,7 +38,6 @@ for ip in ip_list:
         # 'username': 'admin',
         'password': password.strip(),  # ssh password
         # 'secret': password.strip(),  # enable password
-        # 'password': 'Th1nkp@d',
         'ssh_strict': False,
         'fast_cli': True,
     }
